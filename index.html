@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>3D Driving Game for iPad with Textured Car</title>
+<style>
+  body, html {
+    margin: 0; padding: 0; overflow: hidden;
+    background: #222;
+    touch-action: none; /* prevent default gestures */
+  }
+  canvas { display: block; }
+  #controls {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    z-index: 100;
+  }
+  .btn {
+    width: 60px;
+    height: 60px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 10px;
+    text-align: center;
+    line-height: 60px;
+    font-size: 24px;
+    color: white;
+    user-select: none;
+    -webkit-user-select:none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active {
+    background: rgba(255,255,255,0.7);
+  }
+</style>
+</head>
+<body>
+
+<div id="controls">
+  <div class="btn" id="leftBtn">&#8592;</div>
+  <div class="btn" id="upBtn">&#8593;</div>
+  <div class="btn" id="downBtn">&#8595;</div>
+  <div class="btn" id="rightBtn">&#8594;</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+
+<script>
+// Basic scene setup
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// Texture loader
+const loader = new THREE.TextureLoader();
+
+// Road texture
+const roadTextureUrl = 'https://i.imgur.com/7TqkV7S.png'; // road texture
+const roadTexture = loader.load(roadTextureUrl);
+roadTexture.wrapS = roadTexture.wrapT = THREE.RepeatWrapping;
+roadTexture.repeat.set(20, 20);
+
+const groundGeometry = new THREE.PlaneGeometry(200, 200);
+const groundMaterial = new THREE.MeshPhongMaterial({map: roadTexture});
+const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
+
+// Car texture (full wrapped)
+// Let's pick a wrapped texture — here I use a car skin atlas from web (you can replace this URL)
+const carTextureUrl = 'https://i.imgur.com/vCJUM6z.png'; // a car skin texture atlas
+
+// When loaded, we will create the car with this texture
+loader.load(carTextureUrl, carTexture => {
+  carTexture.magFilter = THREE.NearestFilter;
+  carTexture.minFilter = THREE.LinearMipMapLinearFilter;
+
+  // Create car geometry and apply texture on all sides
+  const carGeometry = new THREE.BoxGeometry(2, 1, 4);
+  // Map UVs to cover texture properly (adjust as needed)
+  // Using same texture on all sides for simplicity
+  const carMaterial = new THREE.MeshPhongMaterial({map: carTexture});
+  car = new THREE.Mesh(carGeometry, carMaterial);
+  car.position.y = 0.5;
+  scene.add(car);
+});
+
+let car = null;
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+directionalLight.position.set(5, 10, 7);
+scene.add(directionalLight);
+
+// Camera offset
+const cameraOffset = new THREE.Vector3(0, 5, -10);
+
+// Movement & controls state
+let speed = 0;
+const maxSpeed = 0.2;
+const acceleration = 0.01;
+const friction = 0.005;
+const turnSpeed = 0.03;
+let direction = 0;
+
+// Control flags
+const controls = {
+  up: false,
+  down: false,
+  left: false,
+  right: false,
+};
+
+// Setup touch controls handlers
+function setControl(id, value) {
+  controls[id] = value;
+}
+
+['leftBtn', 'rightBtn', 'upBtn', 'downBtn'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (id === 'leftBtn') setControl('left', true);
+    else if (id === 'rightBtn') setControl('right', true);
+    else if (id === 'upBtn') setControl('up', true);
+    else if (id === 'downBtn') setControl('down', true);
+  });
+  el.addEventListener('touchend', e => {
+    e.preventDefault();
+    if (id === 'leftBtn') setControl('left', false);
+    else if (id === 'rightBtn') setControl('right', false);
+    else if (id === 'upBtn') setControl('up', false);
+    else if (id === 'downBtn') setControl('down', false);
+  });
+  el.addEventListener('touchcancel', e => {
+    e.preventDefault();
+    if (id === 'leftBtn') setControl('left', false);
+    else if (id === 'rightBtn') setControl('right', false);
+    else if (id === 'upBtn') setControl('up', false);
+    else if (id === 'downBtn') setControl('down', false);
+  });
+});
+
+// Keyboard fallback for desktop testing
+window.addEventListener('keydown', e => {
+  if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') controls.up = true;
+  if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') controls.down = true;
+  if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') controls.left = true;
+  if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') controls.right = true;
+});
+window.addEventListener('keyup', e => {
+  if (e.key === 'ArrowUp' || e.key.toLowerCase() === 'w') controls.up = false;
+  if (e.key === 'ArrowDown' || e.key.toLowerCase() === 's') controls.down = false;
+  if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') controls.left = false;
+  if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') controls.right = false;
+});
+
+// Animation loop
+function animate() {
+  requestAnimationFrame(animate);
+  if (!car) {
+    renderer.render(scene, camera);
+    return;
+  }
+
+  // Update speed and direction
+  if (controls.up) speed += acceleration;
+  else if (controls.down) speed -= acceleration;
+  else {
+    if (speed > 0) speed -= friction;
+    if (speed < 0) speed += friction;
+  }
+  if (speed > maxSpeed) speed = maxSpeed;
+  if (speed < -maxSpeed/2) speed = -maxSpeed/2;
+
+  if (controls.left) direction += turnSpeed * (speed / maxSpeed);
+  if (controls.right) direction -= turnSpeed * (speed / maxSpeed);
+
+  // Update car position and rotation
+  direction = direction % (2 * Math.PI);
+  car.rotation.y = direction;
+  car.position.x += Math.sin(direction) * speed;
+  car.position.z += Math.cos(direction) * speed;
+
+  // Update camera smoothly following car
+  const camPos = car.position.clone().add(new THREE.Vector3(
+    Math.sin(direction) * -10,
+    5,
+    Math.cos(direction) * -10
+  ));
+  camera.position.lerp(camPos, 0.1);
+  camera.lookAt(car.position);
+
+  renderer.render(scene, camera);
+}
+
+// Resize handling
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+animate();
+</script>
+
+</body>
+</html>
