@@ -59,8 +59,8 @@ document.body.appendChild(renderer.domElement);
 // Texture loader
 const loader = new THREE.TextureLoader();
 
-// Road texture
-const roadTextureUrl = 'https://imgur.com/gallery/road-texture-LtPZsNv'; // road texture
+// Road texture from three.js official example textures
+const roadTextureUrl = 'https://threejs.org/examples/textures/terrain/grasslight-big.jpg'; 
 const roadTexture = loader.load(roadTextureUrl);
 roadTexture.wrapS = roadTexture.wrapT = THREE.RepeatWrapping;
 roadTexture.repeat.set(20, 20);
@@ -71,26 +71,21 @@ const ground = new THREE.Mesh(groundGeometry, groundMaterial);
 ground.rotation.x = -Math.PI/2;
 scene.add(ground);
 
-// Car texture (full wrapped)
-// Let's pick a wrapped texture — here I use a car skin atlas from web (you can replace this URL)
-const carTextureUrl = 'https://i.imgur.com/vCJUM6z.png'; // a car skin texture atlas
+// Car texture — using a simple checkerboard to simulate texture (replace with your own if needed)
+const carTextureUrl = 'https://threejs.org/examples/textures/uv_grid_opengl.jpg';
 
-// When loaded, we will create the car with this texture
+let car = null;
+
 loader.load(carTextureUrl, carTexture => {
   carTexture.magFilter = THREE.NearestFilter;
   carTexture.minFilter = THREE.LinearMipMapLinearFilter;
 
-  // Create car geometry and apply texture on all sides
   const carGeometry = new THREE.BoxGeometry(2, 1, 4);
-  // Map UVs to cover texture properly (adjust as needed)
-  // Using same texture on all sides for simplicity
   const carMaterial = new THREE.MeshPhongMaterial({map: carTexture});
   car = new THREE.Mesh(carGeometry, carMaterial);
   car.position.y = 0.5;
   scene.add(car);
 });
-
-let car = null;
 
 // Lighting
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
